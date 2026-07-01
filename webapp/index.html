@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <div id="app" class="app-shell">
       <aside class="sidebar">
         <header class="sidebar-header">
@@ -42,6 +43,10 @@
         </header>
 
         <section class="pdf-stage">
+          <div id="pdfLoader" class="pdf-loader" hidden>
+            <div class="pdf-skeleton"></div>
+            <span>Loading PDF...</span>
+          </div>
           <div id="pdfEmpty" class="empty-state">
             <strong>No PDF loaded</strong>
             <span>Import resources, then select a lesson.</span>

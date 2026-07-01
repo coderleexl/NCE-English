@@ -9,6 +9,8 @@
   --brand: #0f766e;
   --brand-strong: #0b5f59;
   --warning: #a15c07;
+  --shadow-soft: 0 12px 38px rgba(31, 41, 38, 0.12);
+  --spring: cubic-bezier(.2, .8, .2, 1);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -20,6 +22,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -34,13 +37,16 @@ textarea {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  animation: appEnter 420ms var(--spring) both;
 }
 
 .sidebar,
 .study-panel {
   min-width: 0;
   overflow: auto;
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
 }
 
 .sidebar {
@@ -59,8 +65,9 @@ textarea {
   gap: 12px;
   padding: 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(24px) saturate(1.18);
+  -webkit-backdrop-filter: blur(24px) saturate(1.18);
 }
 
 .sidebar-header h1 {
@@ -86,6 +93,13 @@ textarea {
   background: var(--panel);
   color: var(--text);
   cursor: pointer;
+  transition:
+    transform 160ms var(--spring),
+    background-color 160ms var(--spring),
+    border-color 160ms var(--spring),
+    box-shadow 160ms var(--spring),
+    opacity 160ms var(--spring);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .icon-button {
@@ -99,6 +113,7 @@ textarea {
   border-color: var(--brand);
   color: white;
   font-weight: 700;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.24);
 }
 
 .secondary-button {
@@ -113,6 +128,21 @@ textarea:disabled {
   opacity: 0.48;
 }
 
+button:not(:disabled):active,
+.lesson-button:active,
+.book-button:active,
+.tab:active {
+  transform: scale(0.96);
+}
+
+.icon-button:not(:disabled):hover,
+.secondary-button:not(:disabled):hover,
+.book-button:hover,
+.lesson-button:hover,
+.tab:hover {
+  background: rgba(15, 118, 110, 0.08);
+}
+
 .import-progress {
   display: flex;
   align-items: center;
@@ -120,6 +150,7 @@ textarea:disabled {
   padding: 12px 16px;
   color: var(--muted);
   border-bottom: 1px solid var(--line);
+  animation: slideDown 260ms var(--spring) both;
 }
 
 .spinner {
@@ -143,6 +174,7 @@ textarea:disabled {
 
 .book {
   margin-bottom: 6px;
+  animation: fadeSlideUp 300ms var(--spring) both;
 }
 
 .book-button,
@@ -154,6 +186,10 @@ textarea:disabled {
   text-align: left;
   border-radius: 8px;
   cursor: pointer;
+  transition:
+    transform 160ms var(--spring),
+    background-color 180ms var(--spring),
+    box-shadow 180ms var(--spring);
 }
 
 .book-button {
@@ -183,14 +219,30 @@ textarea:disabled {
   display: grid;
   gap: 4px;
   padding: 0 0 8px 20px;
+  animation: revealList 220ms var(--spring) both;
+  transform-origin: top;
 }
 
 .lesson-button {
   padding: 8px 10px;
+  position: relative;
 }
 
 .lesson-button.is-selected {
-  background: var(--panel-2);
+  background: rgba(15, 118, 110, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
+}
+
+.lesson-button.is-selected::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 11px;
+  bottom: 11px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--brand);
+  animation: selectionBar 240ms var(--spring) both;
 }
 
 .lesson-row-main {
@@ -221,13 +273,16 @@ textarea:disabled {
 .done-dot.is-done {
   background: var(--brand);
   border-color: var(--brand);
+  animation: popIn 240ms var(--spring) both;
 }
 
 .reader {
   min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  background: #dfe7e5;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0)),
+    #dfe7e5;
 }
 
 .lesson-title {
@@ -257,13 +312,28 @@ textarea:disabled {
   padding: 14px;
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
+  position: relative;
 }
 
 #pdfCanvas {
   max-width: 100%;
   max-height: 100%;
   background: white;
-  box-shadow: 0 8px 30px rgba(30, 40, 38, 0.16);
+  box-shadow: var(--shadow-soft);
+  border-radius: 4px;
+  transition:
+    opacity 180ms var(--spring),
+    transform 220ms var(--spring),
+    box-shadow 220ms var(--spring);
+}
+
+#pdfCanvas.is-turning {
+  opacity: 0;
+  transform: translateX(18px) scale(0.985);
+}
+
+#pdfCanvas.is-loaded {
+  animation: pageSettle 260ms var(--spring) both;
 }
 
 .empty-state {
@@ -273,6 +343,7 @@ textarea:disabled {
   gap: 8px;
   justify-items: center;
   color: var(--muted);
+  animation: fadeSlideUp 320ms var(--spring) both;
 }
 
 .empty-state strong {
@@ -286,7 +357,13 @@ textarea:disabled {
   gap: 12px;
   padding: 12px 16px;
   border-top: 1px solid var(--line);
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+}
+
+#audioScrubber {
+  accent-color: var(--brand);
 }
 
 .audio-time {
@@ -310,16 +387,23 @@ textarea:disabled {
   background: var(--panel);
   cursor: pointer;
   font-weight: 650;
+  transition:
+    transform 160ms var(--spring),
+    background-color 190ms var(--spring),
+    color 190ms var(--spring),
+    box-shadow 190ms var(--spring);
 }
 
 .tab.is-active {
   background: var(--brand);
   border-color: var(--brand);
   color: white;
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18);
 }
 
 .panel-section {
   padding: 16px;
+  animation: panelEnter 260ms var(--spring) both;
 }
 
 .panel-section h2,
@@ -361,6 +445,7 @@ textarea:disabled {
   color: var(--brand-strong);
   font-size: 13px;
   font-weight: 650;
+  animation: chipIn 220ms var(--spring) both;
 }
 
 .caption-list {
@@ -381,10 +466,16 @@ textarea:disabled {
   padding: 8px;
   text-align: left;
   cursor: pointer;
+  transition:
+    transform 160ms var(--spring),
+    background-color 180ms var(--spring),
+    box-shadow 180ms var(--spring);
 }
 
 .caption-button.is-active {
   background: rgba(15, 118, 110, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08);
+  animation: captionPulse 420ms var(--spring) both;
 }
 
 .caption-time {
@@ -424,6 +515,13 @@ textarea:disabled {
   border-radius: 8px;
   padding: 10px;
   background: var(--panel);
+  animation: fadeSlideUp 260ms var(--spring) both;
+  transition: transform 180ms var(--spring), box-shadow 180ms var(--spring);
+}
+
+.exercise-card:focus-within {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
 }
 
 .exercise-prompt {
@@ -448,6 +546,55 @@ textarea:disabled {
   text-align: right;
   color: var(--muted);
   font-size: 11px;
+  transition: color 180ms var(--spring);
+}
+
+.saved-time.is-saved {
+  color: var(--brand);
+  animation: savedPulse 420ms var(--spring) both;
+}
+
+.pdf-loader {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  color: var(--muted);
+  background: linear-gradient(180deg, rgba(223, 231, 229, 0.72), rgba(223, 231, 229, 0.92));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 2;
+  animation: fadeIn 180ms var(--spring) both;
+}
+
+.pdf-skeleton {
+  width: min(48vw, 380px);
+  aspect-ratio: 0.72;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent),
+    linear-gradient(#ffffff, #eef3f2);
+  background-size: 180px 100%, 100% 100%;
+  box-shadow: var(--shadow-soft);
+  animation: shimmer 1.15s linear infinite;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(22, 33, 31, 0.82);
+  color: white;
+  box-shadow: 0 16px 42px rgba(22, 33, 31, 0.22);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  animation: toastIn 220ms var(--spring) both;
 }
 
 [hidden] {
@@ -467,5 +614,143 @@ textarea:disabled {
     width: min(360px, 86vw);
     transform: translateX(0);
     box-shadow: -12px 0 40px rgba(30, 40, 38, 0.18);
+  }
+}
+
+@keyframes appEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes revealList {
+  from {
+    opacity: 0;
+    transform: scaleY(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes selectionBar {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.7); }
+  70% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+@keyframes pageSettle {
+  from {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes panelEnter {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chipIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes captionPulse {
+  0% { transform: scale(0.995); }
+  55% { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+@keyframes savedPulse {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: -180px 0, 0 0; }
+  to { background-position: calc(100% + 180px) 0, 0 0; }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
