@@ -278,11 +278,13 @@ button:not(:disabled):active,
 
 .reader {
   min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0)),
     #dfe7e5;
+  overflow: hidden;
 }
 
 .lesson-title {
@@ -306,18 +308,47 @@ button:not(:disabled):active,
 
 .pdf-stage {
   min-height: 0;
+  height: 100%;
   overflow: auto;
-  display: grid;
-  place-items: center;
+  display: block;
   padding: 14px;
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
   position: relative;
+  scroll-behavior: smooth;
 }
 
-#pdfCanvas {
+.pdf-pages {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 4px 0 28px;
+}
+
+.pdf-page {
+  width: min(100%, 760px);
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent),
+    linear-gradient(#f8fbfa, #e9efee);
+  background-size: 180px 100%, 100% 100%;
+  box-shadow: var(--shadow-soft);
+  animation: shimmer 1.15s linear infinite;
+  scroll-margin: 18px;
+}
+
+.pdf-page.is-rendered {
+  height: auto !important;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.pdf-page canvas {
   max-width: 100%;
-  max-height: 100%;
   background: white;
   box-shadow: var(--shadow-soft);
   border-radius: 4px;
@@ -327,12 +358,7 @@ button:not(:disabled):active,
     box-shadow 220ms var(--spring);
 }
 
-#pdfCanvas.is-turning {
-  opacity: 0;
-  transform: translateX(18px) scale(0.985);
-}
-
-#pdfCanvas.is-loaded {
+.pdf-page.is-rendered canvas {
   animation: pageSettle 260ms var(--spring) both;
 }
 

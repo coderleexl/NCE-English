@@ -26,6 +26,10 @@ const state = {
   currentCaptionIndex: null,
   pdfDocument: null,
   pdfPageIndex: 0,
+  pdfRenderToken: 0,
+  pdfRenderedPages: new Set(),
+  pdfRenderObserver: null,
+  pdfPageObserver: null,
   objectUrls: new Set(),
   resourceRecords: new Map(),
   resourceMode: "empty",
@@ -49,7 +53,7 @@ const elements = {
   nextPageButton: document.querySelector("#nextPageButton"),
   pdfEmpty: document.querySelector("#pdfEmpty"),
   pdfLoader: document.querySelector("#pdfLoader"),
-  pdfCanvas: document.querySelector("#pdfCanvas"),
+  pdfPages: document.querySelector("#pdfPages"),
   playButton: document.querySelector("#playButton"),
   audioScrubber: document.querySelector("#audioScrubber"),
   audioTime: document.querySelector("#audioTime"),
@@ -100,8 +104,9 @@ function bindEvents() {
     showToast(state.completedLessons.has(key) ? "Lesson marked done" : "Lesson reopened");
   });
 
-  elements.prevPageButton.addEventListener("click", () => renderPdfPage(state.pdfPageIndex - 1));
-  elements.nextPageButton.addEventListener("click", () => renderPdfPage(state.pdfPageIndex + 1));
+  elements.prevPageButton.addEventListener("click", () => scrollToPdfPage(state.pdfPageIndex - 1));
+  elements.nextPageButton.addEventListener("click", () => scrollToPdfPage(state.pdfPageIndex + 1));
+  elements.pdfPages.parentElement.addEventListener("scroll", debounce(updatePdfPageFromScroll, 80));
 
   elements.playButton.addEventListener("click", () => {
     if (elements.audio.paused) {
@@ -334,9 +339,12 @@ async function selectLesson(bookNumber, lessonId) {
   state.selectedLessonId = lesson.id;
   state.pdfDocument = null;
   state.pdfPageIndex = lesson.pageIndex;
+  state.pdfRenderToken += 1;
+  state.pdfRenderedPages = new Set();
   state.captions = [];
   state.currentCaptionIndex = null;
-  elements.pdfCanvas.classList.remove("is-loaded", "is-turning");
+  resetPdfObserver();
+  elements.pdfPages.replaceChildren();
 
   state.expandedBooks = new Set([book.book]);
   await persistLearningState();
@@ -366,7 +374,7 @@ function renderLessonHeader() {
 async function loadPdf(book, lesson) {
   elements.pdfEmpty.hidden = false;
   elements.pdfLoader.hidden = false;
-  elements.pdfCanvas.hidden = true;
+  elements.pdfPages.hidden = true;
   elements.prevPageButton.disabled = true;
   elements.nextPageButton.disabled = true;
   elements.pageInfo.textContent = "Page --";
@@ -388,47 +396,167 @@ async function loadPdf(book, lesson) {
     state.objectUrls.add(url);
   }
   state.pdfDocument = await pdfjs.getDocument(url).promise;
-  await renderPdfPage(lesson.pageIndex);
+  await buildPdfScroller(lesson.pageIndex, state.pdfRenderToken);
   elements.pdfLoader.hidden = true;
 }
 
-async function renderPdfPage(pageIndex) {
+async function buildPdfScroller(targetPageIndex, token) {
   if (!state.pdfDocument) {
     return;
   }
 
-  elements.pdfCanvas.classList.remove("is-loaded");
-  elements.pdfCanvas.classList.add("is-turning");
-  const safeIndex = Math.max(0, Math.min(pageIndex, state.pdfDocument.numPages - 1));
-  const page = await state.pdfDocument.getPage(safeIndex + 1);
-  const stage = elements.pdfCanvas.parentElement;
-  const containerWidth = Math.max(320, stage.clientWidth - 28);
-  const containerHeight = Math.max(320, stage.clientHeight - 28);
-  const viewportBase = page.getViewport({ scale: 1 });
-  const scale = Math.min(
-    1.8,
-    containerWidth / viewportBase.width,
-    containerHeight / viewportBase.height
-  );
-  const viewport = page.getViewport({ scale });
-  const context = elements.pdfCanvas.getContext("2d");
-
-  state.pdfPageIndex = safeIndex;
-  elements.pdfCanvas.width = Math.floor(viewport.width);
-  elements.pdfCanvas.height = Math.floor(viewport.height);
-  elements.pdfCanvas.style.width = `${Math.floor(viewport.width)}px`;
-  elements.pdfCanvas.style.height = `${Math.floor(viewport.height)}px`;
   elements.pdfEmpty.hidden = true;
-  elements.pdfCanvas.hidden = false;
+  elements.pdfPages.hidden = false;
+  elements.pdfPages.replaceChildren();
+  resetPdfObserver();
+
+  const firstPage = await state.pdfDocument.getPage(1);
+  if (token !== state.pdfRenderToken) {
+    return;
+  }
+
+  const stageWidth = Math.max(320, elements.pdfPages.parentElement.clientWidth - 28);
+  const baseViewport = firstPage.getViewport({ scale: 1 });
+  const scale = Math.min(1.55, stageWidth / baseViewport.width);
+  const estimatedViewport = firstPage.getViewport({ scale });
+  const pageWidth = Math.floor(estimatedViewport.width);
+  const pageHeight = Math.floor(estimatedViewport.height);
+
+  for (let index = 0; index < state.pdfDocument.numPages; index += 1) {
+    const pageShell = document.createElement("div");
+    pageShell.className = "pdf-page";
+    pageShell.dataset.pageIndex = String(index);
+    pageShell.style.width = `${pageWidth}px`;
+    pageShell.style.height = `${pageHeight}px`;
+    elements.pdfPages.append(pageShell);
+  }
+
+  state.pdfRenderObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const pageIndex = Number(entry.target.dataset.pageIndex);
+      if (entry.isIntersecting) {
+        renderPdfPageInto(entry.target, pageIndex, scale, token);
+      }
+    }
+  }, {
+    root: elements.pdfPages.parentElement,
+    rootMargin: "900px 0px",
+    threshold: [0.05, 0.55]
+  });
+
+  state.pdfPageObserver = new IntersectionObserver((entries) => {
+    const visibleEntries = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((lhs, rhs) => rhs.intersectionRatio - lhs.intersectionRatio);
+
+    if (visibleEntries[0]) {
+      updateVisiblePdfPage(Number(visibleEntries[0].target.dataset.pageIndex));
+    }
+  }, {
+    root: elements.pdfPages.parentElement,
+    threshold: [0.45, 0.6, 0.75]
+  });
+
+  for (const pageNode of elements.pdfPages.children) {
+    state.pdfRenderObserver.observe(pageNode);
+    state.pdfPageObserver.observe(pageNode);
+  }
+
+  scrollToPdfPage(targetPageIndex, { behavior: "auto" });
+  await renderPdfPageInto(elements.pdfPages.children[state.pdfPageIndex], state.pdfPageIndex, scale, token);
+  updateVisiblePdfPage(state.pdfPageIndex);
+}
+
+async function renderPdfPageInto(pageNode, pageIndex, scale, token) {
+  if (!state.pdfDocument || !pageNode || state.pdfRenderedPages.has(pageIndex)) {
+    return;
+  }
+
+  state.pdfRenderedPages.add(pageIndex);
+  const page = await state.pdfDocument.getPage(pageIndex + 1);
+  if (token !== state.pdfRenderToken) {
+    return;
+  }
+
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  canvas.style.width = `${Math.floor(viewport.width)}px`;
+  canvas.style.height = `${Math.floor(viewport.height)}px`;
+  const context = canvas.getContext("2d");
+
+  await page.render({ canvasContext: context, viewport }).promise;
+  if (token !== state.pdfRenderToken) {
+    return;
+  }
+
+  pageNode.replaceChildren(canvas);
+  pageNode.style.width = `${Math.floor(viewport.width)}px`;
+  pageNode.style.height = `${Math.floor(viewport.height)}px`;
+  pageNode.classList.add("is-rendered");
+}
+
+function scrollToPdfPage(pageIndex, options = {}) {
+  if (!state.pdfDocument || !elements.pdfPages.children.length) {
+    return;
+  }
+
+  const safeIndex = Math.max(0, Math.min(pageIndex, state.pdfDocument.numPages - 1));
+  const pageNode = elements.pdfPages.children[safeIndex];
+  if (!pageNode) {
+    return;
+  }
+
+  pageNode.scrollIntoView({
+    block: "start",
+    behavior: options.behavior || "smooth"
+  });
+  updateVisiblePdfPage(safeIndex);
+}
+
+function updateVisiblePdfPage(pageIndex) {
+  if (!state.pdfDocument) {
+    return;
+  }
+
+  const safeIndex = Math.max(0, Math.min(pageIndex, state.pdfDocument.numPages - 1));
+  state.pdfPageIndex = safeIndex;
   elements.prevPageButton.disabled = safeIndex === 0;
   elements.nextPageButton.disabled = safeIndex >= state.pdfDocument.numPages - 1;
   elements.pageInfo.textContent = `${safeIndex + 1}/${state.pdfDocument.numPages}`;
+}
 
-  await page.render({ canvasContext: context, viewport }).promise;
-  requestAnimationFrame(() => {
-    elements.pdfCanvas.classList.remove("is-turning");
-    elements.pdfCanvas.classList.add("is-loaded");
-  });
+function updatePdfPageFromScroll() {
+  if (!state.pdfDocument || !elements.pdfPages.children.length || elements.pdfPages.hidden) {
+    return;
+  }
+
+  const stageTop = elements.pdfPages.parentElement.getBoundingClientRect().top + 18;
+  let bestIndex = state.pdfPageIndex;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const pageNode of elements.pdfPages.children) {
+    const rect = pageNode.getBoundingClientRect();
+    const distance = Math.abs(rect.top - stageTop);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = Number(pageNode.dataset.pageIndex);
+    }
+  }
+
+  updateVisiblePdfPage(bestIndex);
+}
+
+function resetPdfObserver() {
+  if (state.pdfRenderObserver) {
+    state.pdfRenderObserver.disconnect();
+    state.pdfRenderObserver = null;
+  }
+  if (state.pdfPageObserver) {
+    state.pdfPageObserver.disconnect();
+    state.pdfPageObserver = null;
+  }
 }
 
 async function loadAudioAndCaptions(lesson) {
