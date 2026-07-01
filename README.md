@@ -2,6 +2,14 @@
 
 Static PWA version of the NCEPadReader app. It avoids Apple developer signing because it runs in the browser and can be added to the iPad Home Screen from Safari.
 
+Production URL:
+
+```text
+https://coderleexl.github.io/NCE-English/
+```
+
+The app loads the hosted New Concept English resource manifest from GitHub Pages by default. Manual import remains available as a fallback when the hosted resource index is unavailable.
+
 ## Run Locally
 
 ```bash
@@ -22,19 +30,19 @@ From another device on the same network, replace `localhost` with the Mac IP add
 1. Open the app URL in Safari.
 2. Tap Share, then Add to Home Screen.
 3. Open the installed web app.
-4. Tap `+` and choose the `New-Concept-English` folder or select the PDF/MP3/LRC files.
+4. Lessons load automatically from the hosted resource library.
 
-The app caches imported resource files in browser storage and stores learning state locally. iPadOS Safari does not expose the same persistent external folder handle API as Chromium browsers, so the web app uses browser storage as the persistence layer after import.
+Learning state, notes, exercise answers, and completed lessons are stored locally in browser storage. The hosted PDFs, MP3s, and LRC files are fetched from GitHub as needed. If the hosted library is unavailable, tap `+` and choose a local `New-Concept-English` folder or select the PDF/MP3/LRC files.
 
 ## Current Scope
 
 - Four-book lesson tree
 - `Lesson 1-2` style lesson labels
-- PDF page rendering with PDF.js
+- Continuous PDF scrolling with lazy PDF.js rendering
 - MP3 playback
 - LRC synchronized captions
 - Dynamic vocabulary chips
 - Lesson-level Done state
 - Exercises answer areas
 - Lesson notes
-- PWA app shell caching
+- PWA app shell caching with network-first updates
