@@ -35,6 +35,7 @@ const state = {
 };
 
 const elements = {
+  toast: document.querySelector("#toast"),
   importButton: document.querySelector("#importButton"),
   fileInput: document.querySelector("#fileInput"),
   importProgress: document.querySelector("#importProgress"),
@@ -47,6 +48,7 @@ const elements = {
   pageInfo: document.querySelector("#pageInfo"),
   nextPageButton: document.querySelector("#nextPageButton"),
   pdfEmpty: document.querySelector("#pdfEmpty"),
+  pdfLoader: document.querySelector("#pdfLoader"),
   pdfCanvas: document.querySelector("#pdfCanvas"),
   playButton: document.querySelector("#playButton"),
   audioScrubber: document.querySelector("#audioScrubber"),
@@ -95,6 +97,7 @@ function bindEvents() {
     await persistLearningState();
     renderSidebar();
     renderLessonHeader();
+    showToast(state.completedLessons.has(key) ? "Lesson marked done" : "Lesson reopened");
   });
 
   elements.prevPageButton.addEventListener("click", () => renderPdfPage(state.pdfPageIndex - 1));
@@ -247,6 +250,7 @@ async function ingestFiles(files) {
     if (firstLesson) {
       await selectLesson(firstLesson.book.book, firstLesson.lesson.id);
     }
+    showToast("Resources imported");
   } finally {
     elements.importProgress.hidden = true;
   }
@@ -332,6 +336,7 @@ async function selectLesson(bookNumber, lessonId) {
   state.pdfPageIndex = lesson.pageIndex;
   state.captions = [];
   state.currentCaptionIndex = null;
+  elements.pdfCanvas.classList.remove("is-loaded", "is-turning");
 
   state.expandedBooks = new Set([book.book]);
   await persistLearningState();
@@ -360,18 +365,21 @@ function renderLessonHeader() {
 
 async function loadPdf(book, lesson) {
   elements.pdfEmpty.hidden = false;
+  elements.pdfLoader.hidden = false;
   elements.pdfCanvas.hidden = true;
   elements.prevPageButton.disabled = true;
   elements.nextPageButton.disabled = true;
   elements.pageInfo.textContent = "Page --";
 
   if (!book.pdfKey) {
+    elements.pdfLoader.hidden = true;
     elements.pdfEmpty.innerHTML = "<strong>No PDF found</strong><span>This book has no matched PDF file.</span>";
     return;
   }
 
   const source = await resourceSource(book.pdfKey);
   if (!source) {
+    elements.pdfLoader.hidden = true;
     return;
   }
 
@@ -381,6 +389,7 @@ async function loadPdf(book, lesson) {
   }
   state.pdfDocument = await pdfjs.getDocument(url).promise;
   await renderPdfPage(lesson.pageIndex);
+  elements.pdfLoader.hidden = true;
 }
 
 async function renderPdfPage(pageIndex) {
@@ -388,6 +397,8 @@ async function renderPdfPage(pageIndex) {
     return;
   }
 
+  elements.pdfCanvas.classList.remove("is-loaded");
+  elements.pdfCanvas.classList.add("is-turning");
   const safeIndex = Math.max(0, Math.min(pageIndex, state.pdfDocument.numPages - 1));
   const page = await state.pdfDocument.getPage(safeIndex + 1);
   const stage = elements.pdfCanvas.parentElement;
@@ -414,6 +425,10 @@ async function renderPdfPage(pageIndex) {
   elements.pageInfo.textContent = `${safeIndex + 1}/${state.pdfDocument.numPages}`;
 
   await page.render({ canvasContext: context, viewport }).promise;
+  requestAnimationFrame(() => {
+    elements.pdfCanvas.classList.remove("is-turning");
+    elements.pdfCanvas.classList.add("is-loaded");
+  });
 }
 
 async function loadAudioAndCaptions(lesson) {
@@ -605,6 +620,8 @@ function renderExercises() {
     input.addEventListener("input", debounce(async () => {
       state.answers[key] = { text: input.value, updatedAt: Date.now() };
       saved.textContent = `Saved ${new Date(state.answers[key].updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      saved.classList.remove("is-saved");
+      requestAnimationFrame(() => saved.classList.add("is-saved"));
       await persistLearningState();
     }, 250));
     elements.exerciseList.append(card);
@@ -628,6 +645,17 @@ function selectTab(name) {
   }
   elements.studyTab.hidden = name !== "study";
   elements.exerciseTab.hidden = name !== "exercises";
+}
+
+let toastTimer;
+
+function showToast(message) {
+  elements.toast.textContent = message;
+  elements.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    elements.toast.hidden = true;
+  }, 1600);
 }
 
 function findLesson(lessonId) {
