@@ -1,4 +1,4 @@
-const CACHE_NAME = "nce-pad-reader-web-v10";
+const CACHE_NAME = "nce-pad-reader-web-v11";
 const APP_SHELL = [
   "./",
   "./index.html",

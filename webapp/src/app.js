@@ -267,7 +267,9 @@ function setResourceRecords(records) {
 
 function renderResourceStatus(recordCount, mode = "") {
   if (!recordCount) {
-    elements.resourceStatus.textContent = "Import your New-Concept-English folder.";
+    elements.resourceStatus.textContent = mode === "Cached"
+      ? "Hosted library unavailable. Use + to import resources."
+      : "Loading hosted lesson library...";
     return;
   }
 
