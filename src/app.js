@@ -27,6 +27,8 @@ const state = {
   pdfDocument: null,
   pdfPageIndex: 0,
   objectUrls: new Set(),
+  resourceRecords: new Map(),
+  resourceMode: "empty",
   answers: {},
   notes: {},
   selectedLessonId: null
@@ -65,7 +67,7 @@ init();
 async function init() {
   bindEvents();
   await loadState();
-  await loadCachedResources();
+  await loadHostedResources();
   registerServiceWorker();
 }
 
@@ -151,10 +153,39 @@ async function persistLearningState() {
   });
 }
 
+async function loadHostedResources() {
+  try {
+    const response = await fetch("./resources-manifest.json", { cache: "no-cache" });
+    if (response.ok) {
+      const manifest = await response.json();
+      const records = manifest.resources || [];
+      setResourceRecords(records);
+      state.resourceMode = "hosted";
+      state.books = buildResourceIndex(records);
+      renderResourceStatus(records.length, "Hosted");
+      renderSidebar();
+
+      const savedLesson = findLesson(state.selectedLessonId);
+      const firstLesson = state.books.flatMap((book) => book.lessons.map((lesson) => ({ book, lesson })))[0];
+      const target = savedLesson || firstLesson;
+      if (target) {
+        await selectLesson(target.book.book, target.lesson.id);
+      }
+      return;
+    }
+  } catch (error) {
+    console.warn("Hosted resource manifest unavailable.", error);
+  }
+
+  await loadCachedResources();
+}
+
 async function loadCachedResources() {
   const records = await getAllResources();
+  setResourceRecords(records);
+  state.resourceMode = records.length ? "cached" : "empty";
   state.books = buildResourceIndex(records);
-  renderResourceStatus(records.length);
+  renderResourceStatus(records.length, "Cached");
 
   const savedLesson = findLesson(state.selectedLessonId);
   renderSidebar();
@@ -204,9 +235,11 @@ async function ingestFiles(files) {
     const accepted = files.filter((file) => /\.(pdf|mp3|lrc)$/i.test(file.name));
     const records = accepted.map(createResourceRecord);
     await saveResources(records);
+    setResourceRecords(records);
+    state.resourceMode = "cached";
     state.books = buildResourceIndex(records);
     state.expandedBooks = new Set(state.books.map((book) => book.book));
-    renderResourceStatus(records.length);
+    renderResourceStatus(records.length, "Cached");
     renderSidebar();
 
     const firstLesson = state.books.flatMap((book) => book.lessons.map((lesson) => ({ book, lesson })))[0];
@@ -218,14 +251,19 @@ async function ingestFiles(files) {
   }
 }
 
-function renderResourceStatus(recordCount) {
+function setResourceRecords(records) {
+  state.resourceRecords = new Map(records.map((record) => [record.key, record]));
+}
+
+function renderResourceStatus(recordCount, mode = "") {
   if (!recordCount) {
     elements.resourceStatus.textContent = "Import your New-Concept-English folder.";
     return;
   }
 
   const lessonCount = state.books.reduce((sum, book) => sum + book.lessons.length, 0);
-  elements.resourceStatus.textContent = `${state.books.length} books, ${lessonCount} lessons, ${recordCount} files cached.`;
+  const prefix = mode ? `${mode}: ` : "";
+  elements.resourceStatus.textContent = `${prefix}${state.books.length} books, ${lessonCount} lessons, ${recordCount} files.`;
 }
 
 function renderSidebar() {
@@ -330,13 +368,15 @@ async function loadPdf(book, lesson) {
     return;
   }
 
-  const record = await getResource(book.pdfKey);
-  if (!record) {
+  const source = await resourceSource(book.pdfKey);
+  if (!source) {
     return;
   }
 
-  const url = URL.createObjectURL(record.blob);
-  state.objectUrls.add(url);
+  const url = source.url;
+  if (source.shouldRevoke) {
+    state.objectUrls.add(url);
+  }
   state.pdfDocument = await pdfjs.getDocument(url).promise;
   await renderPdfPage(lesson.pageIndex);
 }
@@ -373,17 +413,19 @@ async function loadAudioAndCaptions(lesson) {
   elements.audioTime.textContent = "00:00 / 00:00";
 
   if (lesson.subtitleKey) {
-    const subtitle = await getResource(lesson.subtitleKey);
-    if (subtitle) {
-      state.captions = parseLRC(await subtitle.blob.text());
+    const subtitleText = await resourceText(lesson.subtitleKey);
+    if (subtitleText) {
+      state.captions = parseLRC(subtitleText);
     }
   }
 
   if (lesson.audioKey) {
-    const audio = await getResource(lesson.audioKey);
+    const audio = await resourceSource(lesson.audioKey);
     if (audio) {
-      const url = URL.createObjectURL(audio.blob);
-      state.objectUrls.add(url);
+      const url = audio.url;
+      if (audio.shouldRevoke) {
+        state.objectUrls.add(url);
+      }
       elements.audio.src = url;
       elements.playButton.disabled = false;
       elements.audioScrubber.disabled = false;
@@ -392,6 +434,34 @@ async function loadAudioAndCaptions(lesson) {
 
   renderCaptions();
   renderVocabulary();
+}
+
+async function resourceSource(key) {
+  const hosted = state.resourceRecords.get(key);
+  if (hosted?.url) {
+    return { url: hosted.url, shouldRevoke: false };
+  }
+
+  const record = await getResource(key);
+  if (!record?.blob) {
+    return null;
+  }
+
+  return { url: URL.createObjectURL(record.blob), shouldRevoke: true };
+}
+
+async function resourceText(key) {
+  const hosted = state.resourceRecords.get(key);
+  if (hosted?.url) {
+    const response = await fetch(hosted.url);
+    if (!response.ok) {
+      return "";
+    }
+    return response.text();
+  }
+
+  const record = await getResource(key);
+  return record?.blob ? record.blob.text() : "";
 }
 
 function onAudioTimeUpdate() {

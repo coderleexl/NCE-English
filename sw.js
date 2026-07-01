@@ -1,9 +1,10 @@
-const CACHE_NAME = "nce-pad-reader-web-v4";
+const CACHE_NAME = "nce-pad-reader-web-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./manifest.webmanifest",
+  "./resources-manifest.json",
   "./src/app.js",
   "./src/lrc.js",
   "./src/resource-index.js",
