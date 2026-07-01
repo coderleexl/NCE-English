@@ -44,6 +44,7 @@ const elements = {
   lessonSubtitle: document.querySelector("#lessonSubtitle"),
   markDoneButton: document.querySelector("#markDoneButton"),
   prevPageButton: document.querySelector("#prevPageButton"),
+  pageInfo: document.querySelector("#pageInfo"),
   nextPageButton: document.querySelector("#nextPageButton"),
   pdfEmpty: document.querySelector("#pdfEmpty"),
   pdfCanvas: document.querySelector("#pdfCanvas"),
@@ -362,6 +363,7 @@ async function loadPdf(book, lesson) {
   elements.pdfCanvas.hidden = true;
   elements.prevPageButton.disabled = true;
   elements.nextPageButton.disabled = true;
+  elements.pageInfo.textContent = "Page --";
 
   if (!book.pdfKey) {
     elements.pdfEmpty.innerHTML = "<strong>No PDF found</strong><span>This book has no matched PDF file.</span>";
@@ -388,9 +390,15 @@ async function renderPdfPage(pageIndex) {
 
   const safeIndex = Math.max(0, Math.min(pageIndex, state.pdfDocument.numPages - 1));
   const page = await state.pdfDocument.getPage(safeIndex + 1);
-  const containerWidth = Math.max(320, elements.pdfCanvas.parentElement.clientWidth - 40);
+  const stage = elements.pdfCanvas.parentElement;
+  const containerWidth = Math.max(320, stage.clientWidth - 28);
+  const containerHeight = Math.max(320, stage.clientHeight - 28);
   const viewportBase = page.getViewport({ scale: 1 });
-  const scale = Math.min(1.8, containerWidth / viewportBase.width);
+  const scale = Math.min(
+    1.8,
+    containerWidth / viewportBase.width,
+    containerHeight / viewportBase.height
+  );
   const viewport = page.getViewport({ scale });
   const context = elements.pdfCanvas.getContext("2d");
 
@@ -403,6 +411,7 @@ async function renderPdfPage(pageIndex) {
   elements.pdfCanvas.hidden = false;
   elements.prevPageButton.disabled = safeIndex === 0;
   elements.nextPageButton.disabled = safeIndex >= state.pdfDocument.numPages - 1;
+  elements.pageInfo.textContent = `${safeIndex + 1}/${state.pdfDocument.numPages}`;
 
   await page.render({ canvasContext: context, viewport }).promise;
 }
